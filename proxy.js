@@ -6,6 +6,7 @@ const fs = require('fs');
 const async = require('async');
 const uuidV4 = require('uuid/v4');
 const support = require('./lib/support.js')();
+const os = require('os');
 const log_socket_err = false;
 global.config = require('./config.json');
 
@@ -1103,6 +1104,19 @@ function checkActivePools() {
     }
 }
 
+function checkOSLoadavg() {
+    var osCPUInfo = os.cpus();
+    var osLoadavgInfo = os.loadavg();
+
+    //console.log('check os load avg...');
+    //console.log('cpuinfolen' + osCPUInfo.length);
+    //console.log('osLoadavg' + osLoadavgInfo[1]);
+    if(osLoadavgInfo[1] >= osCPUInfo.length){
+        console.error('System is overload with[' + osLoadavgInfo[1] + '/' + osCPUInfo.length + '], terminate proces!!!');
+        process.exit(0);
+    }
+}
+
 // API Calls
 
 // System Init
@@ -1131,6 +1145,7 @@ if (cluster.isMaster) {
     connectPools();
     setInterval(enumerateWorkerStats, 15000);
     setInterval(balanceWorkers, 90000);
+    setInterval(checkOSLoadavg, 30000);
 } else {
     /*
     setInterval(checkAliveMiners, 30000);
