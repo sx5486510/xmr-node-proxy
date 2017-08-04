@@ -6,6 +6,7 @@ const fs = require('fs');
 const async = require('async');
 const uuidV4 = require('uuid/v4');
 const support = require('./lib/support.js')();
+const log_socket_err = false;
 global.config = require('./config.json');
 
 /*
@@ -61,6 +62,14 @@ function masterMessageHandler(worker, message, handle) {
                 for (let hostname in activePools){
                     if (activePools.hasOwnProperty(hostname)){
                         let pool = activePools[hostname];
+                        if (!pool.active){
+                            continue;
+                        }
+                        if (!pool.isLogin)
+                        {
+                            console.log('!!! pool have not login !!!');
+                            continue;
+                        }
                         worker.send({
                             host: hostname,
                             type: 'newBlockTemplate',
@@ -118,12 +127,14 @@ function slaveMessageHandler(message) {
         case 'disablePool':
             if (activePools.hasOwnProperty(message.pool)){
                 activePools[message.pool].active = false;
+                activePools[message.pool].isLogin = false;
                 checkActivePools();
             }
             break;
         case 'enablePool':
             if (activePools.hasOwnProperty(message.pool)){
                 activePools[message.pool].active = true;
+                process.send({type: 'needPoolState'});
             }
             break;
     }
@@ -188,14 +199,37 @@ function Pool(poolData){
     this.sendId = 1;
     this.sendLog = {};
     this.poolJobs = {};
+    this.allowSelfSignedSSL = true;
+    this.isLogin = false;
+    // Partial checks for people whom havn't upgraded yet
+    if (poolData.hasOwnProperty('allowSelfSignedSSL')){
+        this.allowSelfSignedSSL = !poolData.allowSelfSignedSSL;
+    }
+
     this.connect = function(){
+        for (let worker in cluster.workers){
+            if (cluster.workers.hasOwnProperty(worker)){
+                cluster.workers[worker].send({type: 'disablePool', pool: this.hostname});
+            }
+        }
+        this.active = false;
         if (this.ssl){
-            this.socket = tls.connect(this.port, this.hostname, ()=>{
+            this.socket = tls.connect(this.port, this.hostname, {rejectUnauthorized: this.allowSelfSignedSSL}).on('connect', ()=>{
                 poolSocket(this.hostname);
+            }).on('error', (err)=>{
+                this.connect();
+                if (log_socket_err) {
+                    console.warn(`${global.threadName}Socket error from ${this.hostname} ${err}`);
+                }
             });
         } else {
-            this.socket = net.connect(this.port, this.hostname, ()=>{
+            this.socket = net.connect(this.port, this.hostname).on('connect', ()=>{
                 poolSocket(this.hostname);
+            }).on('error', (err)=>{
+                this.connect();
+                if (log_socket_err) {
+                    console.warn(`${global.threadName}Socket error from ${this.hostname} ${err}`);
+                }
             });
         }
     };
@@ -224,11 +258,19 @@ function Pool(poolData){
         debug.pool(`Sent ${JSON.stringify(rawSend)} to ${this.hostname}`);
     };
     this.login = function () {
+        this.isLogin = false;
         this.sendData('login', {
             login: this.username,
             pass: this.password,
             agent: 'xmr-node-proxy/0.0.1'
         });
+
+        this.active = true;
+        for (let worker in cluster.workers){
+            if (cluster.workers.hasOwnProperty(worker)){
+                cluster.workers[worker].send({type: 'enablePool', pool: this.hostname});
+            }
+        }
     };
     this.sendShare = function (worker, shareData) {
         //btID - Block template ID in the poolJobs circ buffer.
@@ -573,8 +615,6 @@ function enumerateWorkerStats(){
 function poolSocket(hostname){
     let pool = activePools[hostname];
     let socket = pool.socket;
-    socket.setKeepAlive(true);
-    socket.setEncoding('utf8');
     let dataBuffer = '';
     socket.on('data', (d) => {
         dataBuffer += d;
@@ -602,7 +642,9 @@ function poolSocket(hostname){
                         }
                     }
 
-                    console.warn(`${global.threadName}Socket error from ${pool.hostname} Message: ${message}`);
+                    if (log_socket_err) {
+                        console.warn(`${global.threadName}Socket error from ${pool.hostname} Message: ${message}`);
+                    }
                     socket.destroy();
 
                     break;
@@ -612,14 +654,16 @@ function poolSocket(hostname){
             dataBuffer = incomplete;
         }
     }).on('error', (err) => {
-        if (err.code !== 'ECONNRESET') {
-            activePools[pool.hostname].connect();
+        activePools[pool.hostname].connect();
+        if (log_socket_err) {
             console.warn(`${global.threadName}Socket error from ${pool.hostname} ${err}`);
         }
     }).on('close', () => {
         activePools[pool.hostname].connect();
         console.warn(`${global.threadName}Socket closed from ${pool.hostname}`);
     });
+    socket.setKeepAlive(true);
+    socket.setEncoding('utf8');
     console.log(`${global.threadName}connected to pool: ${pool.hostname}`);
     pool.login();
     setInterval(pool.heartbeat, 30000);
@@ -644,6 +688,7 @@ function handlePoolMessage(jsonData, hostname){
         switch(sendLog.method){
             case 'login':
                 pool.id = jsonData.result.id;
+                pool.isLogin = true;
                 handleNewBlockTemplate(jsonData.result.job, hostname);
                 break;
             case 'getjob':
@@ -715,7 +760,7 @@ function Miner(id, params, ip, pushMessage, portData) {
         this.valid_miner = false;
     }
 
-    if (typeof activePools[this.pool].activeBlockTemplate !== 'undefined'){
+    if (activePools[this.pool].activeBlocktemplate === null){
         this.error = "No active block template";
         this.valid_miner = false;
     }
@@ -1001,7 +1046,9 @@ function activatePorts() {
                 }
             }).on('error', function (err) {
                 if (err.code !== 'ECONNRESET') {
-                    console.warn(global.threadName + "Socket Error from " + socket.remoteAddress + " " + err);
+                    if (log_socket_err) {
+                        console.warn(global.threadName + "Socket Error from " + socket.remoteAddress + " " + err);
+                    }
                 }
             }).on('close', function () {
                 pushMessage = function () {

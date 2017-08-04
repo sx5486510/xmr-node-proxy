@@ -52,6 +52,17 @@ The proxy gains a massive boost over a basic pool, by accepting that the majorit
 
 In testing, we've seen AWS T2.Micro instances taking upwards of 2k connections, with T2.Smalls taking 6k.  The proxy is extremely light weight, and while there are more features on the way, it's our goal to keep the proxy as light weight as possible.
 
+Configuration Guidelines
+========================
+Please check the [wiki](https://github.com/Snipa22/xmr-node-proxy/wiki/config_review) for information on configuration
+
+
+Developer Donations
+===================
+The proxy comes configured for a 1% donation, this is easily toggled inside of it's configuration.  If you'd like to make a one time donation, the addresses are as follows:
+* XMR - 44Ldv5GQQhP7K7t3ZBdZjkPA7Kg7dhHwk3ZM3RJqxxrecENSFx27Vq14NAMAd2HBvwEPUVVvydPRLcC69JCZDHLT2X5a4gr
+* BTC - 114DGE2jmPb5CP2RGKZn6u6xtccHhZGFmM
+
 
 Known Working Pools
 ===================
@@ -60,5 +71,6 @@ Known Working Pools
 * [pool.xmr.pt](https://pool.xmr.pt)
 * [minemonero.pro](https://minemonero.pro)
 * [XMRPool.xyz](https://xmrpool.xyz)
+* [ViaXMR.com](https://viaxmr.com)
 
 If you'd like to have your pool added, please make a pull request here, or contact Snipa on IRC!
