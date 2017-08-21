@@ -1,0 +1,33 @@
+{
+  "pools": [
+    {
+      "hostname": "pool.supportxmr.com",
+      "port": 3333,
+      "ssl": false,
+      "share": 100,
+      "username": "466PMQTLu2UDzVbfDD1EmddMu95uqvhjtDDvoaZumD7w6yvkwVLHN3c6JTR8hDk2Gm6ZNSyszpb1oYPTF659YL8rP9gh2Kk",
+      "password": "xmr-node-proxy3:sx5486510@outlook.com",
+      "keepAlive": true,
+      "coin": "xmr",
+      "default": true
+    }
+  ],
+  "listeningPorts": [
+    {
+      "port": 8081,
+      "ssl": false,
+      "diff": 500,
+      "coin": "xmr"
+    }
+  ],
+  "bindAddress": "0.0.0.0",
+  "developerShare": 0,
+  "daemonAddress": "127.0.0.1:18081",
+  "coinSettings": {
+    "xmr":{
+      "minDiff": 100,
+      "maxDiff": 300000,
+      "shareTargetTime": 15
+    }
+  }
+}
