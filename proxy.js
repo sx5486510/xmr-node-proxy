@@ -200,6 +200,7 @@ function Pool(poolData){
     this.sendId = 1;
     this.sendLog = {};
     this.poolJobs = {};
+    this.socket = null;
     this.allowSelfSignedSSL = true;
     this.isLogin = false;
     // Partial checks for people whom havn't upgraded yet
@@ -213,6 +214,16 @@ function Pool(poolData){
                 cluster.workers[worker].send({type: 'disablePool', pool: this.hostname});
             }
         }
+        try {
+            if (this.socket !== null) {
+                this.socket.end();
+                this.socket.destroy();
+            }
+        } catch (e) {
+            console.log("Had issues murdering the old socket.  Om nom: " + e)
+        }
+
+        this.socket = null;
         this.active = false;
         if (this.ssl){
             this.socket = tls.connect(this.port, this.hostname, {rejectUnauthorized: this.allowSelfSignedSSL}).on('connect', ()=>{
