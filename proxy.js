@@ -928,7 +928,7 @@ function handleMinerData(method, params, ip, portData, sendReply, pushMessage, m
                 return;
             }
 
-            let shareAccepted = miner.coinFuncs.processShare(miner, job, blockTemplate, params.nonce, params.result);
+            let shareAccepted = miner.coinFuncs.processShare(miner, job, blockTemplate, params.nonce, params.result, portData.trust);
 
             if (!shareAccepted) {
                 sendReply('Low difficulty share');

@@ -18,7 +18,8 @@
       "port": 3338,
       "ssl": false,
       "diff": 200,
-      "coin": "krb"
+      "coin": "krb",
+      "trust": true
     }
   ],
   "bindAddress": "0.0.0.0",
