@@ -1,15 +1,15 @@
 {
   "pools": [
     {
-      "hostname": "192.168.116.142",
-      "port": 3338,
+      "hostname": "0.0.0.0",
+      "port": 3333,
       "ssl": false,
       "allowSelfSignedSSL": false,
       "share": 100,
       "username": "KiW9pNpn41hCb6KdjfBsY6Dg1WsGe581WjZYV6jCs63vND5cCPgxpQ7Js34gqSbqE562qgNyajzWW4xpNpHme8k37azFpWf",
       "password": "proxy:totally.valid@snipanet.com",
       "keepAlive": true,
-      "coin": "xmr",
+      "coin": "krb",
       "default": true
     }
   ],
@@ -18,10 +18,10 @@
       "port": 3338,
       "ssl": false,
       "diff": 200,
-      "coin": "xmr"
+      "coin": "krb"
     }
   ],
-  "bindAddress": "192.168.116.143",
+  "bindAddress": "0.0.0.0",
   "developerShare": 0,
   "daemonAddress": "127.0.0.1:18081",
   "coinSettings": {
@@ -31,6 +31,11 @@
       "shareTargetTime": 15
     },
     "aeon":{
+      "minDiff": 100,
+      "maxDiff": 300000,
+      "shareTargetTime": 15
+    },
+    "krb":{
       "minDiff": 100,
       "maxDiff": 300000,
       "shareTargetTime": 15
