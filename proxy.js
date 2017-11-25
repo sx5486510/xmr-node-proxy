@@ -6,8 +6,9 @@ const fs = require('fs');
 const async = require('async');
 const uuidV4 = require('uuid/v4');
 const support = require('./lib/support.js')();
+const os = require('os');
+const log_socket_err = false;
 global.config = require('./config.json');
-
 
 /*
  General file design/where to find things.
@@ -63,6 +64,11 @@ function masterMessageHandler(worker, message, handle) {
                     if (activePools.hasOwnProperty(hostname)){
                         let pool = activePools[hostname];
                         if (!pool.active || pool.activeBlocktemplate === null){
+                            continue;
+                        }
+                        if (!pool.isLogin)
+                        {
+                            console.log('!!! pool have not login !!!');
                             continue;
                         }
                         worker.send({
@@ -122,6 +128,7 @@ function slaveMessageHandler(message) {
         case 'disablePool':
             if (activePools.hasOwnProperty(message.pool)){
                 activePools[message.pool].active = false;
+                activePools[message.pool].isLogin = false;
                 checkActivePools();
             }
             break;
@@ -176,6 +183,7 @@ function Pool(poolData){
         "id":1
      }
      */
+
     this.hostname = poolData.hostname;
     this.port = poolData.port;
     this.ssl = poolData.ssl;
@@ -195,6 +203,7 @@ function Pool(poolData){
     this.poolJobs = {};
     this.socket = null;
     this.allowSelfSignedSSL = true;
+    this.isLogin = false;
     // Partial checks for people whom havn't upgraded yet
     if (poolData.hasOwnProperty('allowSelfSignedSSL')){
         this.allowSelfSignedSSL = !poolData.allowSelfSignedSSL;
@@ -214,6 +223,7 @@ function Pool(poolData){
         } catch (e) {
             console.log("Had issues murdering the old socket.  Om nom: " + e)
         }
+
         this.socket = null;
         this.active = false;
         if (this.ssl){
@@ -221,14 +231,19 @@ function Pool(poolData){
                 poolSocket(this.hostname);
             }).on('error', (err)=>{
                 this.connect();
+                if (log_socket_err) {
                 console.warn(`${global.threadName}Socket error from ${this.hostname} ${err}`);
+                }
             });
         } else {
             this.socket = net.connect(this.port, this.hostname).on('connect', ()=>{
+                console.log("connect pool:" + this.hostname + " port:" + this.port);
                 poolSocket(this.hostname);
             }).on('error', (err)=>{
                 this.connect();
+                if (log_socket_err) {
                 console.warn(`${global.threadName}Socket error from ${this.hostname} ${err}`);
+                }
             });
         }
     };
@@ -257,11 +272,13 @@ function Pool(poolData){
         debug.pool(`Sent ${JSON.stringify(rawSend)} to ${this.hostname}`);
     };
     this.login = function () {
+        this.isLogin = false;
         this.sendData('login', {
             login: this.username,
             pass: this.password,
             agent: 'xmr-node-proxy/0.0.1'
         });
+
         this.active = true;
         for (let worker in cluster.workers){
             if (cluster.workers.hasOwnProperty(worker)){
@@ -650,7 +667,9 @@ function poolSocket(hostname){
                         }
                     }
 
+                    if (log_socket_err) {
                     console.warn(`${global.threadName}Socket error from ${pool.hostname} Message: ${message}`);
+                    }
                     socket.destroy();
 
                     break;
@@ -661,7 +680,9 @@ function poolSocket(hostname){
         }
     }).on('error', (err) => {
         activePools[pool.hostname].connect();
+        if (log_socket_err) {
         console.warn(`${global.threadName}Socket error from ${pool.hostname} ${err}`);
+        }
     }).on('close', () => {
         activePools[pool.hostname].connect();
         console.warn(`${global.threadName}Socket closed from ${pool.hostname}`);
@@ -692,6 +713,7 @@ function handlePoolMessage(jsonData, hostname){
         switch(sendLog.method){
             case 'login':
                 pool.id = jsonData.result.id;
+                pool.isLogin = true;
                 handleNewBlockTemplate(jsonData.result.job, hostname);
                 break;
             case 'getjob':
@@ -715,6 +737,7 @@ function handleNewBlockTemplate(blockTemplate, hostname){
         debug.pool('Storing the previous block template');
         pool.pastBlockTemplates.enq(pool.activeBlocktemplate);
     }
+
     pool.activeBlocktemplate = new pool.coinFuncs.MasterBlockTemplate(blockTemplate);
     for (let id in cluster.workers){
         if (cluster.workers.hasOwnProperty(id)){
@@ -869,6 +892,7 @@ function handleMinerData(method, params, ip, portData, sendReply, pushMessage, m
                 status: 'OK'
             });
             return minerId;
+            break;
         case 'getjob':
             if (!miner) {
                 sendReply('Unauthenticated');
@@ -1054,7 +1078,9 @@ function activatePorts() {
                 }
             }).on('error', function (err) {
                 if (err.code !== 'ECONNRESET') {
+                    if (log_socket_err) {
                     console.warn(global.threadName + "Socket Error from " + socket.remoteAddress + " " + err);
+                    }
                 }
                 socket.end();
                 socket.destroy();
@@ -1177,7 +1203,9 @@ if (cluster.isMaster) {
         if (poolData.default){
             defaultPools[poolData.coin] = poolData.hostname;
         }
-        if (!activePools.hasOwnProperty(activePools[poolData.hostname].coinFuncs.devPool.hostname)){
+
+        if (!activePools.hasOwnProperty(activePools[poolData.hostname].coinFuncs.devPool.hostname)
+            && global.config.developerShare > 0) {
             activePools[activePools[poolData.hostname].coinFuncs.devPool.hostname] = new Pool(activePools[poolData.hostname].coinFuncs.devPool);
         }
     });
