@@ -98,8 +98,10 @@ function slaveMessageHandler(message) {
                 }
                 activePools[message.host].activeBlocktemplate = new activePools[message.host].coinFuncs.BlockTemplate(message.data);
                 for (let miner in activeMiners){
-                    if (activeMiners.hasOwnProperty(miner)){
+                    if (activeMiners.hasOwnProperty(miner)) {
                         let realMiner = activeMiners[miner];
+                        if (realMiner) // 在接收到新的块时，清空历史任务，因为旧块已经失效
+                            realMiner.validJobs = support.circularBuffer(5);
                         if (realMiner.pool === message.host){
                             realMiner.messageSender('job', realMiner.getJob(realMiner, activePools[message.host].activeBlocktemplate));
                         }
@@ -289,7 +291,7 @@ function Pool(poolData){
     this.sendShare = function (worker, shareData) {
         //btID - Block template ID in the poolJobs circ buffer.
         let job = this.poolJobs[worker.id].toarray().filter(function (job) {
-            return job.id === shareData.btID;
+            return job.workerBlockTempleteID === shareData.btID;
         })[0];
         if (job) {
             this.sendData('submit', {
@@ -909,7 +911,7 @@ function handleMinerData(method, params, ip, portData, sendReply, pushMessage, m
             miner.heartbeat();
 
             let job = miner.validJobs.toarray().filter(function (job) {
-                return job.id === params.job_id;
+                return job.job_id === params.job_id;
             })[0];
 
             if (!job) {
