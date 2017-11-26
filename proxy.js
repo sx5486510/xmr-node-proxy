@@ -94,7 +94,7 @@ function slaveMessageHandler(message) {
                     debug.workers(`Received a new block template for ${message.host} and have one in cache.  Storing`);
                     activePools[message.host].pastBlockTemplates.enq(activePools[message.host].activeBlocktemplate);
                 } else {
-                    debug.workers(`Received a new block template for ${message.host} do not have one in cache.`);
+                    debug.workers(`Received a new block template at height:${message.data.height} for ${message.host} do not have one in cache.`);
                 }
                 activePools[message.host].activeBlocktemplate = new activePools[message.host].coinFuncs.BlockTemplate(message.data);
                 for (let miner in activeMiners){
@@ -102,7 +102,7 @@ function slaveMessageHandler(message) {
                         let realMiner = activeMiners[miner];
                         if (realMiner) // 在接收到新的块时，清空历史任务，因为旧块已经失效
                             realMiner.validJobs = support.circularBuffer(5);
-                        if (realMiner.pool === message.host){
+                       if (realMiner.pool === message.host){
                             realMiner.messageSender('job', realMiner.getJob(realMiner, activePools[message.host].activeBlocktemplate));
                         }
                     }
@@ -730,7 +730,7 @@ function handlePoolMessage(jsonData, hostname){
 
 function handleNewBlockTemplate(blockTemplate, hostname){
     let pool = activePools[hostname];
-    console.log(`Received new block template from ${pool.hostname}`);
+    console.log(`Received new block template from ${pool.hostname} at height ${blockTemplate.height}`);
     if(pool.activeBlocktemplate){
         if (pool.activeBlocktemplate.job_id === blockTemplate.job_id){
             debug.pool('No update with this job, it is an upstream dupe');
@@ -914,6 +914,7 @@ function handleMinerData(method, params, ip, portData, sendReply, pushMessage, m
                 return job.job_id === params.job_id;
             })[0];
 
+//console.log(miner.id + " submit job id:"+params.job_id);
             if (!job) {
                 sendReply('Invalid job id');
                 return;
