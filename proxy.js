@@ -683,7 +683,7 @@ function poolSocket(hostname){
         if (log_socket_err) {
         console.warn(`${global.threadName}Socket error from ${pool.hostname} ${err}`);
         }
-    }).on('close', () => {
+        }).on('close', () => {
         activePools[pool.hostname].connect();
         console.warn(`${global.threadName}Socket closed from ${pool.hostname}`);
     });
@@ -934,7 +934,8 @@ function handleMinerData(method, params, ip, portData, sendReply, pushMessage, m
             let activeBlockTemplate = activePools[miner.pool].activeBlocktemplate;
             let pastBlockTemplates = activePools[miner.pool].pastBlockTemplates;
 
-            let blockTemplate = activeBlockTemplate.id === job.templateID ? activeBlockTemplate : pastBlockTemplates.toarray().filter(function (t) {
+            let blockTemplate = activeBlockTemplate.id === job.templateID ? activeBlockTemplate :
+                pastBlockTemplates.toarray().filter(function (t) {
                 return t.id === job.templateID;
             })[0];
 
