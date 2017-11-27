@@ -45,6 +45,15 @@ let activeWorkers = {};
 let defaultPools = {};
 let masterStats = {shares: 0, blocks: 0, hashes: 0};
 
+let totalShares = 0,
+    trustedShares = 0,
+    normalShares = 0,
+    invalidShares = 0,
+    rejectShares = 0,
+    submitShares = 0,
+    submitedShares = 0,
+    submitedDiff = 0;
+
 // IPC Registry
 function masterMessageHandler(worker, message, handle) {
     if (typeof message !== 'undefined' && 'type' in message){
@@ -82,6 +91,20 @@ function masterMessageHandler(worker, message, handle) {
             case 'workerStats':
                 activeWorkers[worker.id][message.minerID] = message.data;
                 break;
+            case 'trustedShare':
+                trustedShares += 1;
+                totalShares += 1;
+                break;
+            case 'normalShare':
+                normalShares += 1;
+                totalShares += 1;
+                break;
+            case 'invalidShare':
+                invalidShares += 1;
+                totalShares += 1;
+            case 'rejectShare':
+                rejectShares += 1;
+                totalShares += 1;
         }
     }
 }
@@ -228,23 +251,23 @@ function Pool(poolData){
 
         this.socket = null;
         this.active = false;
-        if (this.ssl){
-            this.socket = tls.connect(this.port, this.hostname, {rejectUnauthorized: this.allowSelfSignedSSL}).on('connect', ()=>{
+        if (this.ssl) {
+            this.socket = tls.connect(this.port, this.hostname, { rejectUnauthorized: this.allowSelfSignedSSL }).on('connect', () => {
                 poolSocket(this.hostname);
-            }).on('error', (err)=>{
+            }).on('error', (err) => {
                 this.connect();
                 if (log_socket_err) {
-                console.warn(`${global.threadName}Socket error from ${this.hostname} ${err}`);
+                    console.warn(`${global.threadName}Socket error from ${this.hostname} ${err}`);
                 }
             });
         } else {
-            this.socket = net.connect(this.port, this.hostname).on('connect', ()=>{
+            this.socket = net.connect(this.port, this.hostname).on('connect', () => {
                 console.log("connect pool:" + this.hostname + " port:" + this.port);
                 poolSocket(this.hostname);
-            }).on('error', (err)=>{
+            }).on('error', (err) => {
                 this.connect();
                 if (log_socket_err) {
-                console.warn(`${global.threadName}Socket error from ${this.hostname} ${err}`);
+                    console.warn(`${global.threadName}Socket error from ${this.hostname} ${err}`);
                 }
             });
         }
@@ -272,6 +295,7 @@ function Pool(poolData){
         this.socket.write(JSON.stringify(rawSend) + '\n');
         this.sendLog[rawSend.id] = rawSend;
         debug.pool(`Sent ${JSON.stringify(rawSend)} to ${this.hostname}`);
+        submitedShares += 1;
     };
     this.login = function () {
         // 设定最小的困难
@@ -281,9 +305,9 @@ function Pool(poolData){
                 minDiff = portData.diff;
         });
 
-         this.isLogin = false;
+        this.isLogin = false;
         this.sendData('login', {
-            login: this.username+ '.' + minDiff,
+            login: this.username + '.' + minDiff,
             pass: this.password,
             agent: 'xmr-node-proxy/0.0.1'
         });
@@ -301,6 +325,8 @@ function Pool(poolData){
             return job.workerBlockTempleteID === shareData.btID;
         })[0];
         if (job) {
+            submitShares += 1;
+            submitedDiff += shareData.proxyDiff;
             this.sendData('submit', {
                 job_id: job.masterJobID,
                 nonce: shareData.nonce,
@@ -309,6 +335,9 @@ function Pool(poolData){
                 poolNonce: job.poolNonce,
                 proxyDiff: shareData.proxyDiff
             });
+        }
+        else {
+            console.error("send share cannot find valid BlockTempleteID");
         }
     };
 }
@@ -643,7 +672,18 @@ function enumerateWorkerStats(){
             debug.workers(`Worker: ${poolID} currently has ${stats.miners} miners connected at ${stats.hashRate} h/s with an average diff of ${Math.floor(stats.diff/stats.miners)}`);
         }
     }
-    console.log(`The proxy currently has ${global_stats.miners} miners connected at ${global_stats.hashRate} h/s with an average diff of ${Math.floor(global_stats.diff/global_stats.miners)}`);
+    console.log(`The proxy currently has ${global_stats.miners} miners connected at ${global_stats.hashRate} h/s with an average diff of ${Math.floor(global_stats.diff / global_stats.miners)}`);
+    console.log(`Processed Trusted(${trustedShares}), Validated(${normalShares}), Invalid(${invalidShares}), Reject(${rejectShares}), Total(${totalShares}), Submit(${submitShares}), Submited(${submitedShares}) shares, `
+        + `SubmitedDiff(${submitedDiff})`
+        + ` in the last 15 seconds`);
+    totalShares = 0;
+    trustedShares = 0;
+    normalShares = 0;
+    invalidShares = 0;
+    rejectShares = 0;
+    submitedShares = 0;
+    submitShares = 0;
+    submitedDiff = 0;
 }
 
 function poolSocket(hostname){
@@ -690,9 +730,9 @@ function poolSocket(hostname){
     }).on('error', (err) => {
         activePools[pool.hostname].connect();
         if (log_socket_err) {
-        console.warn(`${global.threadName}Socket error from ${pool.hostname} ${err}`);
+            console.warn(`${global.threadName}Socket error from ${pool.hostname} ${err}`);
         }
-        }).on('close', () => {
+    }).on('close', () => {
         activePools[pool.hostname].connect();
         console.warn(`${global.threadName}Socket closed from ${pool.hostname}`);
     });
@@ -885,6 +925,9 @@ function handleMinerData(method, params, ip, portData, sendReply, pushMessage, m
     }
     switch (method) {
         case 'login':
+            if (miner) {
+                console.error("miner login with exist miner id:" + params.id);
+            }
             let difficulty = portData.difficulty;
             let minerId = uuidV4();
             miner = new Miner(minerId, params, ip, pushMessage, portData, minerSocket);
@@ -913,6 +956,7 @@ function handleMinerData(method, params, ip, portData, sendReply, pushMessage, m
         case 'submit':
             if (!miner) {
                 sendReply('Unauthenticated');
+                process.send({ type: 'rejectShare' });
                 return;
             }
             miner.heartbeat();
@@ -924,6 +968,7 @@ function handleMinerData(method, params, ip, portData, sendReply, pushMessage, m
 //console.log(miner.id + " submit job id:"+params.job_id);
             if (!job) {
                 sendReply('Invalid job id');
+                process.send({ type: 'rejectShare' });
                 return;
             }
 
@@ -931,12 +976,14 @@ function handleMinerData(method, params, ip, portData, sendReply, pushMessage, m
             if (!nonceCheck.test(params.nonce)) {
                 console.warn(global.threadName + 'Malformed nonce: ' + JSON.stringify(params) + ' from ' + miner.logString);
                 sendReply('Duplicate share');
+                process.send({ type: 'rejectShare' });
                 return;
             }
 
             if (job.submissions.indexOf(params.nonce) !== -1) {
                 console.warn(global.threadName + 'Duplicate share: ' + JSON.stringify(params) + ' from ' + miner.logString);
                 sendReply('Duplicate share');
+                process.send({ type: 'rejectShare' });
                 return;
             }
 
@@ -960,6 +1007,7 @@ function handleMinerData(method, params, ip, portData, sendReply, pushMessage, m
                 }
                 miner.messageSender('job', miner.getJob(miner, activePools[miner.pool].activeBlocktemplate, true));
                 sendReply('Block expired');
+                process.send({ type: 'rejectShare' });
                 return;
             }
 
@@ -967,7 +1015,15 @@ function handleMinerData(method, params, ip, portData, sendReply, pushMessage, m
 
             if (!shareAccepted) {
                 sendReply('Low difficulty share');
+                process.send({ type: 'invalidShare' });
                 return;
+            }
+
+            if (portData.trust) {
+                process.send({ type: 'trustedShare' });
+            }
+            else {
+                process.send({ type: 'normalShare' });
             }
 
             let now = Date.now() / 1000 || 0;
