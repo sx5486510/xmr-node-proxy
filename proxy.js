@@ -280,10 +280,10 @@ function Pool(poolData){
             if (portData.diff < minDiff)
                 minDiff = portData.diff;
         });
-        
-        this.isLogin = false;
+
+         this.isLogin = false;
         this.sendData('login', {
-            login: this.username + '.' + minDiff,
+            login: this.username+ '.' + minDiff,
             pass: this.password,
             agent: 'xmr-node-proxy/0.0.1'
         });
