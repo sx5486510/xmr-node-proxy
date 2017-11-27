@@ -274,9 +274,16 @@ function Pool(poolData){
         debug.pool(`Sent ${JSON.stringify(rawSend)} to ${this.hostname}`);
     };
     this.login = function () {
+        // 设定最小的困难
+        let minDiff = 300000;
+        async.each(global.config.listeningPorts, function (portData) {
+            if (portData.diff < minDiff)
+                minDiff = portData.diff;
+        });
+        
         this.isLogin = false;
         this.sendData('login', {
-            login: this.username,
+            login: this.username + '.' + minDiff,
             pass: this.password,
             agent: 'xmr-node-proxy/0.0.1'
         });
